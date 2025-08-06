@@ -1,84 +1,285 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>ToDo Login</title>
-  <style>
-    body { font-family: sans-serif; padding: 2rem; }
-    #todoArea { display: none; }
+  <title>Modern Trello Board</title>
+<style>
+ body {
+      font-family: sans-serif;
+      padding: 2rem;
+    }
+    #todoArea {
+      display: none;
+    }
+    #board {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+    .column {
+      background: #f0f0f0;
+      padding: 1rem;
+      border-radius: 5px;
+      width: 220px;
+    }
+    .column h4 {
+      margin-top: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    input, button{
+        padding: 5px;
+        margin: 5px;
+        border-radius: 20px;
+    }
+    .task-list {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      background: #fff;
+      margin-bottom: 0.5rem;
+      padding: 0.5rem;
+      border-radius: 4px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .task-controls button {
+      margin-left: 4px;
+    }
+    #loginArea{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  
+    }
   </style>
 </head>
 <body>
   <div id="loginArea">
-    <h3>Login</h3>
-    <input id="username" placeholder="Enter username">
-    <button onclick="login()">Login</button>
+    <h3>Welcome Back</h3>
+    <input id="username" placeholder="Enter your username">
+    <button onclick="login()">Sign In</button>
   </div>
 
   <div id="todoArea">
-    <h3>Your ToDo List</h3>
-    <input id="taskInput" placeholder="New task">
-    <button onclick="addTask()">Add</button>
-    <br><br>
-    <input id="searchInput" placeholder="Search..." oninput="filterTasks()">
-    <ul id="taskList"></ul>
-    <br>
-    <button onclick="logout()">Logout</button>
+    <h3>Your Project Board</h3>
+    
+    <div class="controls-section">
+      <input id="taskInput" placeholder="Add a new task...">
+      <button onclick="addTask()">Add Task</button>
+      <input id="searchInput" placeholder="Search tasks..." oninput="filterTasks()">
+    </div>
+
+    <div class="controls-section">
+      <input id="columnNameInput" placeholder="New column name...">
+      <button class="add-column-btn" onclick="addColumn()">➕ Add Column</button>
+    </div>
+
+    <div id="searchResults"></div>
+    <div id="board"></div>
+    
+    <div class="logout-section">
+      <button onclick="logout()">Sign Out</button>
+    </div>
   </div>
 
-  <script>
-    let allTasks = [];
+<script>
+  let allTasks = [];
+  let currentColumnId = null;
 
-    async function login() {
-      const username = document.getElementById('username').value;
-      await fetch('/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username })
-      });
-      document.getElementById('loginArea').style.display = 'none';
-      document.getElementById('todoArea').style.display = 'block';
-      loadTasks();
-    }
+  async function login() {
+    const username = document.getElementById('username').value;
+    await fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username })
+    });
+    document.getElementById('loginArea').style.display = 'none';
+    document.getElementById('todoArea').style.display = 'block';
+    loadBoard();
+  }
 
-    async function logout() {
-      await fetch('/logout');
-      document.getElementById('loginArea').style.display = 'block';
-      document.getElementById('todoArea').style.display = 'none';
-      allTasks = [];
-    }
+  async function logout() {
+    await fetch('/logout');
+    document.getElementById('loginArea').style.display = 'block';
+    document.getElementById('todoArea').style.display = 'none';
+    allTasks = [];
+  }
 
-    async function addTask() {
-      const task = document.getElementById('taskInput').value;
-      await fetch('/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task })
-      });
-      document.getElementById('taskInput').value = '';
-      loadTasks();
-    }
+  async function addTask() {
+    const task = document.getElementById('taskInput').value;
+    if (!task.trim()) return;
+    await fetch('/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task })
+    });
+    document.getElementById('taskInput').value = '';
+    loadBoard();
+  }
 
-    async function loadTasks() {
-      const res = await fetch('/list');
-      allTasks = await res.json();
-      renderTasks(allTasks);
-    }
+  async function deleteTask(id) {
+    await fetch(`/delete/${id}`, { method: 'DELETE' });
+    loadBoard();
+  }
 
-    function renderTasks(tasks) {
-      const list = document.getElementById('taskList');
-      list.innerHTML = '';
-      tasks.forEach(([id, task]) => {
+  async function editTask(id, newTask) {
+    await fetch(`/edit/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task: newTask })
+    });
+    loadBoard();
+  }
+async function moveTask(taskId, toColumnId, newPosition) {
+  await fetch('/move', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      task_id: taskId,
+      to_column_id: toColumnId,
+      new_position: newPosition
+    })
+  });
+  loadBoard();
+}
+
+  async function addColumn() {
+    const name = document.getElementById('columnNameInput').value;
+    if (!name.trim()) return;
+    await fetch('/column', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    document.getElementById('columnNameInput').value = '';
+    loadBoard();
+  }
+
+  async function deleteColumn(id) {
+    await fetch(`/column/${id}`, { method: 'DELETE' });
+    loadBoard();
+  }
+
+  async function loadBoard() {
+    const res = await fetch('/board');
+    const board = await res.json();
+    const boardDiv = document.getElementById('board');
+    boardDiv.innerHTML = '';
+
+    board.forEach(col => {
+      const colDiv = document.createElement('div');
+      colDiv.className = 'column';
+      colDiv.dataset.columnId = col.id;
+
+      const title = document.createElement('h4');
+      title.innerHTML = `<span>${col.name}</span> <button onclick="deleteColumn(${col.id})">🗑️</button>`;
+      colDiv.appendChild(title);
+
+      const ul = document.createElement('ul');
+      ul.className = 'task-list';
+      ul.dataset.columnId = col.id;
+
+      col.tasks.forEach(task => {
         const li = document.createElement('li');
-        li.textContent = task;
-        list.appendChild(li);
+        
+        const span = document.createElement('span');
+        span.textContent = task.task;
+        span.style.flexGrow = '1';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = task.task;
+        input.style.display = 'none';
+
+        const saveBtn = document.createElement('button');
+        saveBtn.textContent = '💾';
+        saveBtn.style.display = 'none';
+        saveBtn.onclick = () => {
+          editTask(task.id, input.value);
+        };
+
+        const editBtn = document.createElement('button');
+        editBtn.textContent = '✏️';
+        editBtn.onclick = () => {
+          span.style.display = 'none';
+          input.style.display = 'inline';
+          saveBtn.style.display = 'inline';
+          editBtn.style.display = 'none';
+        };
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = '🗑️';
+        deleteBtn.onclick = () => {
+          deleteTask(task.id);
+        };
+
+        const controlDiv = document.createElement('div');
+        controlDiv.className = 'task-controls';
+        controlDiv.appendChild(input);
+        controlDiv.appendChild(saveBtn);
+        controlDiv.appendChild(editBtn);
+        controlDiv.appendChild(deleteBtn);
+
+        li.appendChild(span);
+        li.appendChild(controlDiv);
+        ul.appendChild(li);
       });
+
+      colDiv.appendChild(ul);
+      boardDiv.appendChild(colDiv);
+    });
+  }
+
+  function filterTasks() {
+    const query = document.getElementById('searchInput').value.toLowerCase();
+    const boardDiv = document.getElementById('board');
+    const resultsDiv = document.getElementById('searchResults');
+
+    if (query.trim() === '') {
+      resultsDiv.innerHTML = '';
+      boardDiv.style.display = 'flex';
+      return;
     }
 
-    function filterTasks() {
-      const query = document.getElementById('searchInput').value.toLowerCase();
-      const filtered = allTasks.filter(([id, task]) => task.toLowerCase().includes(query));
-      renderTasks(filtered);
+    boardDiv.style.display = 'none';
+    resultsDiv.innerHTML = `<h4>Search Results for "${query}"</h4>`;
+
+    const columns = document.querySelectorAll('.column');
+    let found = 0;
+
+    columns.forEach(col => {
+      const colName = col.querySelector('h4 span').textContent;
+      const tasks = col.querySelectorAll('.task-list li');
+      
+      tasks.forEach(taskEl => {
+        const taskText = taskEl.querySelector('span').textContent;
+        if (taskText.toLowerCase().includes(query)) {
+          const result = document.createElement('div');
+          result.textContent = `📌 ${taskText} (in "${colName}")`;
+          resultsDiv.appendChild(result);
+          found++;
+        }
+      });
+    });
+
+    if (found === 0) {
+      resultsDiv.innerHTML += `<p>No matching tasks found.</p>`;
     }
-  </script>
+  }
+
+  const eventSource = new EventSource("/events");
+  eventSource.onmessage = function(event) {
+    loadBoard();
+  };
+
+  
+</script>
 </body>
 </html>
