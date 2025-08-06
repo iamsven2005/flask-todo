@@ -1,22 +1,84 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="cupcake">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NYPTECH-FLASK</title>
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.10.2/dist/full.min.css" rel="stylesheet" type="text/css" />
-    <script src="https://cdn.tailwindcss.com"></script>
+  <title>ToDo Login</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; }
+    #todoArea { display: none; }
+  </style>
 </head>
-<body class="flex container flex-col">
-    <div class="flex container flex-col items-center">
-        <div class="text-3xl">
-        Title
-        </div>
-        <button class="btn btn-ghost">
-            Hello
-        </button>
-    </div>
+<body>
+  <div id="loginArea">
+    <h3>Login</h3>
+    <input id="username" placeholder="Enter username">
+    <button onclick="login()">Login</button>
+  </div>
 
+  <div id="todoArea">
+    <h3>Your ToDo List</h3>
+    <input id="taskInput" placeholder="New task">
+    <button onclick="addTask()">Add</button>
+    <br><br>
+    <input id="searchInput" placeholder="Search..." oninput="filterTasks()">
+    <ul id="taskList"></ul>
+    <br>
+    <button onclick="logout()">Logout</button>
+  </div>
+
+  <script>
+    let allTasks = [];
+
+    async function login() {
+      const username = document.getElementById('username').value;
+      await fetch('/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username })
+      });
+      document.getElementById('loginArea').style.display = 'none';
+      document.getElementById('todoArea').style.display = 'block';
+      loadTasks();
+    }
+
+    async function logout() {
+      await fetch('/logout');
+      document.getElementById('loginArea').style.display = 'block';
+      document.getElementById('todoArea').style.display = 'none';
+      allTasks = [];
+    }
+
+    async function addTask() {
+      const task = document.getElementById('taskInput').value;
+      await fetch('/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task })
+      });
+      document.getElementById('taskInput').value = '';
+      loadTasks();
+    }
+
+    async function loadTasks() {
+      const res = await fetch('/list');
+      allTasks = await res.json();
+      renderTasks(allTasks);
+    }
+
+    function renderTasks(tasks) {
+      const list = document.getElementById('taskList');
+      list.innerHTML = '';
+      tasks.forEach(([id, task]) => {
+        const li = document.createElement('li');
+        li.textContent = task;
+        list.appendChild(li);
+      });
+    }
+
+    function filterTasks() {
+      const query = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = allTasks.filter(([id, task]) => task.toLowerCase().includes(query));
+      renderTasks(filtered);
+    }
+  </script>
 </body>
 </html>

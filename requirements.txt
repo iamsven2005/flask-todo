@@ -1,1 +1,4 @@
-Flask==3.0.0
+Flask
+psycopg2
+flask_cors
+load_dotenv
