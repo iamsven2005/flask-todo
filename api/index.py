@@ -178,6 +178,59 @@ def move_task():
             """, (data['to_column_id'], data['new_position'], data['task_id'], session['username']))
     push_update()
     return jsonify({'status': 'moved'})
+@app.route('/column/<int:id>/duplicate', methods=['POST'])
+def duplicate_column(id):
+    if 'username' not in session:
+        return jsonify({'error': 'unauthorized'}), 401
+    username = session['username']
+
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            # Get original column name
+            cur.execute("SELECT name FROM columns WHERE id = %s AND owner = %s;", (id, username))
+            result = cur.fetchone()
+            if not result:
+                return jsonify({'error': 'column not found'}), 404
+            original_name = result[0]
+
+            # Create new column
+            new_name = f"{original_name} (copy)"
+            cur.execute("INSERT INTO columns (name, owner) VALUES (%s, %s) RETURNING id;", (new_name, username))
+            new_col_id = cur.fetchone()[0]
+
+            # Copy tasks
+            cur.execute("""
+                SELECT task, position FROM todos
+                WHERE column_id = %s AND owner = %s
+                ORDER BY position ASC;
+            """, (id, username))
+            tasks = cur.fetchall()
+
+            for task, pos in tasks:
+                cur.execute("""
+                    INSERT INTO todos (task, owner, column_id, position)
+                    VALUES (%s, %s, %s, %s);
+                """, (task, username, new_col_id, pos))
+
+    push_update()
+    return jsonify({'status': 'duplicated'})
+@app.route('/column/<int:id>', methods=['PUT'])
+def rename_column(id):
+    if 'username' not in session:
+        return jsonify({'error': 'unauthorized'}), 401
+    data = request.json
+    new_name = data.get('name', '').strip()
+    if not new_name:
+        return jsonify({'error': 'name required'}), 400
+
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE columns SET name = %s
+                WHERE id = %s AND owner = %s;
+            """, (new_name, id, session['username']))
+    push_update()
+    return jsonify({'status': 'renamed'})
 
 if __name__ == '__main__':
     app.run(debug=True, threaded=True)
